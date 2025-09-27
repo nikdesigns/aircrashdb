@@ -1,123 +1,135 @@
 // pages/api/reports/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { dbConnect } from '@/lib/mongodb';
-import ReportModel from '@/models/Report';
-import sanitizeHtml from 'sanitize-html';
-
-type Data = {
-  reports?: any[];
-  page?: number;
-  limit?: number;
-  total?: number;
-  error?: string;
-};
+import Report from '@/models/Report';
+import { verifyAdmin } from '@/lib/serverAuth';
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<Data>
+  res: NextApiResponse
 ) {
   try {
     await dbConnect();
-  } catch (err) {
-    console.error('DB connect error', err);
-    return res.status(500).json({ error: 'DB connection error' });
-  }
 
-  try {
     if (req.method === 'GET') {
-      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
-      const limit = Math.max(
-        1,
-        parseInt((req.query.limit as string) || '20', 10)
-      );
-      const skip = (page - 1) * limit;
-      const total = await ReportModel.countDocuments({});
-      const docs = await ReportModel.find({})
-        .sort({ createdAt: -1 })
+      const {
+        page = '1',
+        limit = '12',
+        q,
+        type,
+        operator,
+        dateFrom,
+        dateTo,
+        tag,
+      } = req.query;
+
+      const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+      const pageSize = Math.min(100, parseInt(String(limit), 10) || 12);
+      const skip = (pageNum - 1) * pageSize;
+
+      const filter: any = { status: { $ne: 'deleted' } };
+
+      if (q && typeof q === 'string') {
+        filter.$text = { $search: q };
+      }
+
+      if (type && typeof type === 'string' && type !== '') filter.type = type;
+      if (operator && typeof operator === 'string' && operator !== '')
+        filter.operator = operator;
+      if (tag && typeof tag === 'string' && tag !== '') filter.tags = tag;
+
+      if (dateFrom || dateTo) {
+        filter.date = {};
+        if (dateFrom && typeof dateFrom === 'string')
+          filter.date.$gte = new Date(dateFrom);
+        if (dateTo && typeof dateTo === 'string')
+          filter.date.$lte = new Date(dateTo);
+      }
+
+      const total = await Report.countDocuments(filter);
+      let query = Report.find(filter)
+        .sort({ date: -1, createdAt: -1 })
         .skip(skip)
-        .limit(limit)
-        .lean();
+        .limit(pageSize);
+      // if text search, add score sort
+      if (filter.$text) {
+        query = Report.find(filter, { score: { $meta: 'textScore' } }).sort({
+          score: { $meta: 'textScore' },
+          date: -1,
+        });
+      }
+      const docs = await query.lean();
+
       const reports = (docs || []).map((d: any) => ({
-        id: d._id?.toString() ?? '',
-        title: d.title ?? '',
-        type: d.type ?? undefined,
-        date: d.date ?? undefined,
-        summary: d.summary ?? undefined,
-        site: d.site ?? undefined,
-        aircraft: d.aircraft ?? undefined,
-        operator: d.operator ?? undefined,
-        fatalities:
-          typeof d.fatalities !== 'undefined' ? d.fatalities : undefined,
-        injuries: typeof d.injuries !== 'undefined' ? d.injuries : undefined,
-        survivors: typeof d.survivors !== 'undefined' ? d.survivors : undefined,
-        origin: d.origin ?? undefined,
-        destination: d.destination ?? undefined,
-        thumbnail: d.thumbnail ?? undefined,
-        images: d.images ?? undefined,
-        content: d.content ?? undefined,
+        id: d._id?.toString() ?? null,
+        slug: d.slug ?? null,
+        title: d.title ?? null,
+        type: d.type ?? null,
+        date: d.date ?? null,
+        summary: d.summary ?? null,
+        site: d.site ?? null,
+        aircraft: d.aircraft ?? null,
+        operator: d.operator ?? null,
+        fatalities: typeof d.fatalities !== 'undefined' ? d.fatalities : null,
+        injuries: typeof d.injuries !== 'undefined' ? d.injuries : null,
+        survivors: typeof d.survivors !== 'undefined' ? d.survivors : null,
+        origin: d.origin ?? null,
+        destination: d.destination ?? null,
+        thumbnail: d.thumbnail ?? null,
+        images: Array.isArray(d.images)
+          ? d.images.map((it: any) => ({
+              url: it.url ?? '',
+              caption: it.caption ?? '',
+            }))
+          : [],
+        tags: Array.isArray(d.tags) ? d.tags : [],
       }));
-      return res.status(200).json({ reports, page, limit, total });
+
+      res.setHeader(
+        'Cache-Control',
+        'public, max-age=10, s-maxage=10, stale-while-revalidate=30'
+      );
+      return res.status(200).json({ reports, total });
     }
 
     if (req.method === 'POST') {
-      // sanitize content field and permit thumbnail/images arrays
-      const payload = req.body || {};
-      const safeContent =
-        typeof payload.content === 'string'
-          ? sanitizeHtml(payload.content, {
-              allowedTags: sanitizeHtml.defaults.allowedTags.concat([
-                'img',
-                'h1',
-                'h2',
-                'h3',
-                'figure',
-                'figcaption',
-              ]),
-              allowedAttributes: {
-                ...sanitizeHtml.defaults.allowedAttributes,
-                img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
-              },
-              allowedSchemesByTag: {
-                img: ['http', 'https', 'data'],
-              },
-            })
-          : undefined;
+      // create new report (admin-only)
+      try {
+        verifyAdmin(req);
+      } catch (err: any) {
+        return res
+          .status(401)
+          .json({ error: err?.message || 'Not authenticated' });
+      }
 
-      const toInsert: any = {
-        title: payload.title,
-        type: payload.type,
-        date: payload.date,
-        summary: payload.summary,
-        site: payload.site,
-        aircraft: payload.aircraft,
-        operator: payload.operator,
-        fatalities:
-          typeof payload.fatalities === 'number'
-            ? payload.fatalities
-            : undefined,
-        injuries:
-          typeof payload.injuries === 'number' ? payload.injuries : undefined,
-        survivors:
-          typeof payload.survivors === 'number' ? payload.survivors : undefined,
-        origin: payload.origin,
-        destination: payload.destination,
-        thumbnail: payload.thumbnail,
-        images: Array.isArray(payload.images)
-          ? payload.images
-          : payload.images
-            ? [payload.images]
-            : [],
-        content: safeContent,
-      };
+      const payload = req.body ?? {};
+      // normalize images if provided as strings
+      if (Array.isArray(payload.images)) {
+        payload.images = payload.images.map((it: any) =>
+          typeof it === 'string'
+            ? { url: it, caption: '' }
+            : { url: it.url ?? '', caption: it.caption ?? '' }
+        );
+      }
+      // set slug if not present
+      if (!payload.slug && payload.title) {
+        const base = payload.title
+          .toString()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 80);
+        payload.slug = base + '-' + Math.random().toString(36).slice(2, 8);
+      }
 
-      const created = await ReportModel.create(toInsert);
-      return res.status(201).json(created);
+      const created = await Report.create(payload);
+      return res.status(201).json({ id: created._id, _id: created._id });
     }
 
     res.setHeader('Allow', ['GET', 'POST']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).end();
   } catch (err: any) {
-    console.error('API /api/reports error:', err);
-    return res.status(500).json({ error: err?.message || 'Server error' });
+    console.error('api/reports/index error', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 }
