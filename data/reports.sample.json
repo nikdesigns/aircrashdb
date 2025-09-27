@@ -1,0 +1,46 @@
+[
+  {
+    "id": "1",
+    "title": "Flight A123 disappearance",
+    "type": "Disappearance",
+    "date": "2024-03-08",
+    "country": "IN",
+    "summary": "Short summary",
+    "site": "Indian Ocean",
+    "aircraft": "Boeing 777",
+    "operator": "Airline A"
+  },
+  {
+    "id": "2",
+    "title": "Flight B456 accident",
+    "type": "Accident",
+    "date": "2025-01-15",
+    "country": "US",
+    "summary": "Short summary",
+    "site": "Somewhere, USA",
+    "aircraft": "Airbus A320",
+    "operator": "Airline B"
+  },
+  {
+    "id": "3",
+    "title": "Flight C789 incident",
+    "type": "Incident",
+    "date": "2025-09-10",
+    "country": "GB",
+    "summary": "Short summary",
+    "site": "Atlantic",
+    "aircraft": "Boeing 737",
+    "operator": "Airline C"
+  },
+  {
+    "id": "4",
+    "title": "Flight D012 accident",
+    "type": "Accident",
+    "date": "2025-09-02",
+    "country": "IN",
+    "summary": "Short summary",
+    "site": "City X",
+    "aircraft": "Embraer E190",
+    "operator": "Airline D"
+  }
+]
