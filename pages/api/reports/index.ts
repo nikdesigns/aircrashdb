@@ -1,97 +1,123 @@
 // pages/api/reports/index.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '@/lib/prisma';
+import { dbConnect } from '@/lib/mongodb';
+import ReportModel from '@/models/Report';
+import sanitizeHtml from 'sanitize-html';
 
-type ReportInput = {
-  title: string;
-  type?: string;
-  date?: string;
-  country?: string;
-  summary?: string;
-  site?: string;
-  aircraft?: string;
-  operator?: string;
-  fatalities?: number | null;
-  injuries?: number | null;
-  survivors?: number | null;
-  origin?: string;
-  destination?: string;
-  pdf_url?: string;
+type Data = {
+  reports?: any[];
+  page?: number;
+  limit?: number;
+  total?: number;
+  error?: string;
 };
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<Data>
 ) {
   try {
+    await dbConnect();
+  } catch (err) {
+    console.error('DB connect error', err);
+    return res.status(500).json({ error: 'DB connection error' });
+  }
+
+  try {
     if (req.method === 'GET') {
-      // pagination + search
-      const page = Math.max(1, Number(req.query.page) || 1);
-      const limit = Math.min(100, Number(req.query.limit) || 20);
-      const q = (req.query.q as string) || '';
-      const sort = (req.query.sort as string) || 'createdAt';
-      const order: 'asc' | 'desc' =
-        (req.query.order as 'asc' | 'desc') || 'desc';
-
-      const where = q
-        ? {
-            OR: [
-              { title: { contains: q, mode: 'insensitive' } },
-              { summary: { contains: q, mode: 'insensitive' } },
-              { site: { contains: q, mode: 'insensitive' } },
-              { operator: { contains: q, mode: 'insensitive' } },
-            ],
-          }
-        : {};
-
-      const [total, items] = await Promise.all([
-        prisma.report.count({ where }),
-        prisma.report.findMany({
-          where,
-          orderBy: { [sort]: order },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-      ]);
-
-      return res.status(200).json({
-        total,
-        page,
-        limit,
-        items,
-      });
-    } else if (req.method === 'POST') {
-      const body = req.body as ReportInput;
-      if (!body || !body.title) {
-        return res.status(400).json({ error: 'Missing title' });
-      }
-
-      const created = await prisma.report.create({
-        data: {
-          title: body.title,
-          type: body.type,
-          date: body.date,
-          country: body.country,
-          summary: body.summary,
-          site: body.site,
-          aircraft: body.aircraft,
-          operator: body.operator,
-          fatalities: body.fatalities ?? null,
-          injuries: body.injuries ?? null,
-          survivors: body.survivors ?? null,
-          origin: body.origin,
-          destination: body.destination,
-          pdf_url: body.pdf_url,
-        },
-      });
-
-      return res.status(201).json(created);
-    } else {
-      res.setHeader('Allow', ['GET', 'POST']);
-      return res.status(405).end(`Method ${req.method} not allowed`);
+      const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
+      const limit = Math.max(
+        1,
+        parseInt((req.query.limit as string) || '20', 10)
+      );
+      const skip = (page - 1) * limit;
+      const total = await ReportModel.countDocuments({});
+      const docs = await ReportModel.find({})
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+      const reports = (docs || []).map((d: any) => ({
+        id: d._id?.toString() ?? '',
+        title: d.title ?? '',
+        type: d.type ?? undefined,
+        date: d.date ?? undefined,
+        summary: d.summary ?? undefined,
+        site: d.site ?? undefined,
+        aircraft: d.aircraft ?? undefined,
+        operator: d.operator ?? undefined,
+        fatalities:
+          typeof d.fatalities !== 'undefined' ? d.fatalities : undefined,
+        injuries: typeof d.injuries !== 'undefined' ? d.injuries : undefined,
+        survivors: typeof d.survivors !== 'undefined' ? d.survivors : undefined,
+        origin: d.origin ?? undefined,
+        destination: d.destination ?? undefined,
+        thumbnail: d.thumbnail ?? undefined,
+        images: d.images ?? undefined,
+        content: d.content ?? undefined,
+      }));
+      return res.status(200).json({ reports, page, limit, total });
     }
+
+    if (req.method === 'POST') {
+      // sanitize content field and permit thumbnail/images arrays
+      const payload = req.body || {};
+      const safeContent =
+        typeof payload.content === 'string'
+          ? sanitizeHtml(payload.content, {
+              allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+                'img',
+                'h1',
+                'h2',
+                'h3',
+                'figure',
+                'figcaption',
+              ]),
+              allowedAttributes: {
+                ...sanitizeHtml.defaults.allowedAttributes,
+                img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+              },
+              allowedSchemesByTag: {
+                img: ['http', 'https', 'data'],
+              },
+            })
+          : undefined;
+
+      const toInsert: any = {
+        title: payload.title,
+        type: payload.type,
+        date: payload.date,
+        summary: payload.summary,
+        site: payload.site,
+        aircraft: payload.aircraft,
+        operator: payload.operator,
+        fatalities:
+          typeof payload.fatalities === 'number'
+            ? payload.fatalities
+            : undefined,
+        injuries:
+          typeof payload.injuries === 'number' ? payload.injuries : undefined,
+        survivors:
+          typeof payload.survivors === 'number' ? payload.survivors : undefined,
+        origin: payload.origin,
+        destination: payload.destination,
+        thumbnail: payload.thumbnail,
+        images: Array.isArray(payload.images)
+          ? payload.images
+          : payload.images
+            ? [payload.images]
+            : [],
+        content: safeContent,
+      };
+
+      const created = await ReportModel.create(toInsert);
+      return res.status(201).json(created);
+    }
+
+    res.setHeader('Allow', ['GET', 'POST']);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
   } catch (err: any) {
-    console.error('reports API error', err);
-    return res.status(500).json({ error: err?.message ?? 'server error' });
+    console.error('API /api/reports error:', err);
+    return res.status(500).json({ error: err?.message || 'Server error' });
   }
 }

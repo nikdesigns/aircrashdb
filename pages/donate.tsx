@@ -297,7 +297,7 @@ export default function DonatePage({ initialGeo }: Props) {
         </div>
 
         <aside className="rounded bg-white p-4 shadow-sm border border-slate-100">
-          <h5 className="text-sm font-semibold">Top donors</h5>
+          <h5 className="text-sm font-semibold">Recent donors</h5>
           <div className="mt-3 max-h-40 overflow-auto">
             {loadingDonors ? (
               <div className="text-sm text-slate-500">Loading…</div>

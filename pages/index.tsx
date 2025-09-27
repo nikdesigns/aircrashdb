@@ -1,171 +1,168 @@
 // pages/index.tsx
-import Link from 'next/link';
+import React, { useState } from 'react';
+import Head from 'next/head';
+import CompactCard, { Report as ReportType } from '@/components/CompactCard';
 import HeroStats from '@/components/HeroStats';
-import { Label } from '@/components/Label'; // adjust path if needed
-import { Icon } from '@/components/Icons'; // adjust path if needed
-import { getBadgeClass } from '@/lib/utils'; // adjust path if needed
-import React from 'react';
+import { dbConnect } from '@/lib/mongodb';
+import ReportModel from '@/models/Report';
+import { GetServerSideProps } from 'next';
 
-// Mock data (replace with real DB/API call)
-const reports = [
-  {
-    id: '1',
-    title: 'Flight A123 disappearance',
-    type: 'Disappearance',
-    date: '2024-03-08',
-    summary:
-      'A scheduled international passenger flight from Kuala Lumpur to Beijing disappeared over the South China Sea.',
-    site: 'Indian Ocean',
-    aircraft: 'Boeing 777',
-    operator: 'Airline A',
-    fatalities: '239',
-    injuries: '0',
-    survivors: '0',
-    origin: 'Kuala Lumpur',
-    destination: 'Beijing',
-  },
-  {
-    id: '2',
-    title: 'Flight B456 accident',
-    type: 'Accident',
-    date: '2025-01-15',
-    summary:
-      'A Boeing 737 overshot the runway, resulting in serious damage and casualties.',
-    site: 'USA',
-    aircraft: 'Airbus A320',
-    operator: 'Airline B',
-    fatalities: '12',
-    injuries: '30',
-    survivors: '100',
-    origin: 'New York',
-    destination: 'Chicago',
-  },
-  {
-    id: '3',
-    title: 'Flight C789 incident',
-    type: 'Incident',
-    date: '2025-09-10',
-    summary: 'A mid-air event caused an emergency diversion.',
-    site: 'Atlantic',
-    aircraft: 'Boeing 737',
-    operator: 'Airline C',
-    fatalities: '0',
-    injuries: '5',
-    survivors: '150',
-    origin: 'London',
-    destination: 'Toronto',
-  },
-];
+type Props = {
+  initialReports: ReportType[];
+  initialTotal: number;
+  initialPage: number;
+  pageSize: number;
+};
 
-export default function HomePage() {
+export default function HomePage({
+  initialReports,
+  initialTotal,
+  initialPage,
+  pageSize,
+}: Props) {
+  const [reports, setReports] = useState<ReportType[]>(initialReports);
+  const [page, setPage] = useState<number>(initialPage);
+  const [total, setTotal] = useState<number>(initialTotal);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const allLoaded = reports.length >= total;
+
+  const loadMore = async () => {
+    if (loading || allLoaded) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const nextPage = page + 1;
+      const res = await fetch(
+        `/api/reports?page=${nextPage}&limit=${pageSize}`
+      );
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+      const data = await res.json();
+      if (data.reports && Array.isArray(data.reports)) {
+        setReports((prev) => [...prev, ...data.reports]);
+        setPage(nextPage);
+        if (typeof data.total === 'number') setTotal(data.total);
+      } else {
+        throw new Error('Invalid response shape');
+      }
+    } catch (err: any) {
+      console.error('loadMore error', err);
+      setError(err?.message ?? 'Error loading more reports');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      {/* Header */}
-      <header className="mb-6">
-        <h1 className="text-3xl font-extrabold">AirCrashDB</h1>
-        <p className="mt-2 text-slate-600">
-          A free archive of air crash investigation reports.
-        </p>
-      </header>
+    <>
+      <Head>
+        <title>AirCrashDB — Archive of air crash investigation reports</title>
+        <meta
+          name="description"
+          content="AirCrashDB — searchable archive of air crash investigation reports, incidents and summaries with dates, aircraft, operator and outcomes."
+        />
+        <meta name="robots" content="index,follow" />
+      </Head>
 
-      {/* Hero Stats */}
-      <div className="mb-8">
-        <HeroStats />
-      </div>
+      <main className="mx-auto max-w-[1100px] px-6 py-10">
+        <header className="mb-6">
+          <h1 className="text-3xl font-extrabold tracking-tight">AirCrashDB</h1>
+          <p className="mt-2 text-slate-600 max-w-prose">
+            A free archive of air crash investigation reports.
+          </p>
+        </header>
 
-      {/* Reports List */}
-      <div className="grid gap-6">
-        {reports.map((r) => (
-          <article
-            key={r.id}
-            className="rounded border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            {/* Title + Badge + Date */}
-            <div className="flex items-start gap-3 sm:items-center sm:gap-4 mb-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/reports/${r.id}`}
-                    className="text-base font-semibold text-slate-900 leading-tight min-w-0 hover:underline"
-                  >
-                    {/* Fallback clamp via inline styles if Tailwind plugin missing */}
-                    <span
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {r.title}
-                    </span>
-                  </Link>
+        <div className="mb-8">
+          <HeroStats />
+        </div>
 
-                  <span
-                    className={`ml-1 shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${getBadgeClass(
-                      r.type
-                    )}`}
-                  >
-                    {r.type}
-                  </span>
-                </div>
-              </div>
+        <section className="grid gap-6">
+          {reports.map((r) => (
+            <CompactCard key={String(r.id)} r={r} />
+          ))}
+        </section>
 
-              {(() => {
-                const d = new Date(r.date);
-                const iso = Number.isFinite(d.getTime())
-                  ? d.toISOString()
-                  : undefined;
-                return (
-                  <time
-                    className="text-sm text-slate-500 shrink-0"
-                    dateTime={iso}
-                  >
-                    {r.date}
-                  </time>
-                );
-              })()}
-            </div>
+        <div className="mt-8 flex flex-col items-center gap-3">
+          {error && <div className="text-sm text-rose-600">{error}</div>}
 
-            {/* Summary */}
-            <p
-              className="mt-0 mb-2 text-xs text-slate-700"
-              style={{
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }}
+          {!allLoaded ? (
+            <button
+              onClick={loadMore}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 bg-white text-sm shadow-sm hover:shadow-md transition disabled:opacity-60"
+              aria-label="Load more reports"
             >
-              {r.summary}
-            </p>
-
-            {/* Metadata grid */}
-            <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-xs">
-              <Label icon={Icon.site} label="Site" value={r.site} />
-              <Label icon={Icon.aircraft} label="Aircraft" value={r.aircraft} />
-              <Label icon={Icon.operator} label="Operator" value={r.operator} />
-              <Label
-                icon={Icon.fatalities}
-                label="Fatalities"
-                value={r.fatalities}
-              />
-              <Label icon={Icon.injuries} label="Injuries" value={r.injuries} />
-              <Label
-                icon={Icon.survivors}
-                label="Survivors"
-                value={r.survivors}
-              />
-              <Label icon={Icon.origin} label="Origin" value={r.origin} />
-              <Label
-                icon={Icon.destination}
-                label="Destination"
-                value={r.destination}
-              />
+              {loading ? 'Loading…' : 'Load more'}
+            </button>
+          ) : (
+            <div className="text-sm text-slate-500">
+              All reports loaded ({total})
             </div>
-          </article>
-        ))}
-      </div>
-    </main>
+          )}
+        </div>
+      </main>
+    </>
   );
 }
+
+/**
+ * getServerSideProps - returns first page of reports and total count
+ * Important: convert undefined -> null so Next.js can serialize props
+ */
+export const getServerSideProps: GetServerSideProps<Props> = async () => {
+  try {
+    await dbConnect();
+
+    const pageSize = 6;
+    const page = 1;
+    const skip = 0;
+
+    const total = await ReportModel.countDocuments({});
+
+    const docs = await ReportModel.find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize)
+      .lean();
+
+    const initialReports: ReportType[] = (docs || []).map((d: any) => ({
+      id: d._id?.toString() ?? null,
+      title: d.title ?? null,
+      type: d.type ?? null,
+      date: d.date ?? null,
+      summary: d.summary ?? null,
+      site: d.site ?? null,
+      aircraft: d.aircraft ?? null,
+      operator: d.operator ?? null,
+      fatalities: typeof d.fatalities !== 'undefined' ? d.fatalities : null,
+      injuries: typeof d.injuries !== 'undefined' ? d.injuries : null,
+      survivors: typeof d.survivors !== 'undefined' ? d.survivors : null,
+      origin: d.origin ?? null,
+      destination: d.destination ?? null,
+      thumbnail: d.thumbnail ?? null,
+      images: Array.isArray(d.images) ? d.images : null,
+      content: d.content ?? null,
+    }));
+
+    return {
+      props: {
+        initialReports,
+        initialTotal: total,
+        initialPage: page,
+        pageSize,
+      },
+    };
+  } catch (err) {
+    console.error('getServerSideProps error fetching reports:', err);
+    return {
+      props: {
+        initialReports: [],
+        initialTotal: 0,
+        initialPage: 1,
+        pageSize: 6,
+      },
+    };
+  }
+};

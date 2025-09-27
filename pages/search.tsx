@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import Label from '@/components/Label';
+import { Label } from '@/components/Label'; // ✅ named import
 
 type Report = {
   id: string;

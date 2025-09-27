@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "seed:db": "node scripts/seed-db.js",
     "lint": "eslint --fix"
   },
   "dependencies": {
@@ -27,11 +28,14 @@
     "clsx": "^2.1.1",
     "framer-motion": "11.18.2",
     "intl-messageformat": "10.7.16",
+    "mongoose": "^8.18.2",
     "next": "15.3.1",
     "next-themes": "0.4.6",
     "prisma": "^6.16.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "react-quill": "^2.0.0",
+    "sanitize-html": "^2.17.0",
     "stripe": "^18.5.0"
   },
   "devDependencies": {
@@ -64,5 +68,16 @@
   "description": "This is a template for creating applications using Next.js 14 (pages directory) and HeroUI (v2).",
   "main": "next.config.js",
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikdesigns/aircrashdb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nikdesigns/aircrashdb/issues"
+  },
+  "homepage": "https://github.com/nikdesigns/aircrashdb#readme"
 }
