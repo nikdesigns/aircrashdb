@@ -1,0 +1,106 @@
+.
+├── LICENSE
+├── README.md
+├── components
+│   ├── AdminReportForm.tsx
+│   ├── CompactCard.tsx
+│   ├── CurrencyBanner.tsx
+│   ├── HelpPopover.tsx
+│   ├── HeroStats.tsx
+│   ├── Icons.tsx
+│   ├── Label.tsx
+│   ├── Layout.tsx
+│   ├── Lightbox.tsx
+│   ├── NavBar.tsx
+│   ├── RelatedReports.tsx
+│   ├── ReportActions.tsx
+│   ├── ReportGallery.tsx
+│   ├── ReportTOC.tsx
+│   ├── SearchBox.tsx
+│   ├── Sidebar.tsx
+│   ├── Timeline.tsx
+│   ├── Tooltip.tsx
+│   ├── primitives.ts
+│   └── theme-switch.tsx
+├── config
+│   ├── fonts.ts
+│   └── site.ts
+├── data
+│   └── reports.sample.json
+├── eslint.config.mjs
+├── layouts
+│   ├── default.tsx
+│   └── head.tsx
+├── lib
+│   ├── geo.ts
+│   ├── mongodb.ts
+│   ├── prisma.ts
+│   ├── serverAuth.ts
+│   ├── useAdminAuth.ts
+│   └── utils.ts
+├── models
+│   └── Report.ts
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── pages
+│   ├── _app.tsx
+│   ├── _document.tsx
+│   ├── about
+│   │   └── index.tsx
+│   ├── admin
+│   │   ├── edit
+│   │   ├── index.tsx
+│   │   ├── login.tsx
+│   │   └── new-report.tsx
+│   ├── api
+│   │   ├── auth
+│   │   ├── cloudinary
+│   │   ├── donations.ts
+│   │   ├── exchange-rate.ts
+│   │   ├── hello.ts
+│   │   ├── reports
+│   │   └── stats.ts
+│   ├── blog
+│   │   └── index.tsx
+│   ├── docs
+│   │   └── index.tsx
+│   ├── donate
+│   │   └── success.tsx
+│   ├── donate.tsx
+│   ├── index.tsx
+│   ├── pricing
+│   │   └── index.tsx
+│   ├── reports
+│   │   └── [id].tsx
+│   ├── search.tsx
+│   └── test-quill.tsx
+├── postcss.config.js
+├── prisma
+│   ├── dev.db
+│   ├── migrations
+│   │   ├── 20250927055602_init
+│   │   └── migration_lock.toml
+│   ├── schema.prisma
+│   └── seed.ts
+├── project-structure.txt
+├── public
+│   ├── favicon.ico
+│   ├── sample-image.jpg
+│   └── sample-report.pdf
+├── scripts
+│   ├── migrate_reports.js
+│   └── seed-db.js
+├── styles
+│   └── globals.css
+├── tailwind.config.js
+├── tsconfig.json
+├── types
+│   └── index.ts
+└── utils
+    ├── formatDate.ts
+    ├── uploadToCloudinary.ts
+    └── uploadToCloudinarySigned.ts
+
+28 directories, 76 files

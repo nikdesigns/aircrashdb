@@ -127,6 +127,7 @@ export default function NewReportPage() {
     investigationBodies: [] as string[],
     tags: [] as string[],
     verified: false,
+    geo: null as any,
   });
 
   const [loading, setLoading] = useState(false);
@@ -537,6 +538,20 @@ export default function NewReportPage() {
           />
         </div>
 
+        {/* NEW: Damage input */}
+        <div>
+          <label className="block text-sm font-medium">Damage</label>
+          <input
+            value={form.damage}
+            onChange={(e) => updateField('damage', e.target.value)}
+            placeholder="e.g. Minor, Substantial, Destroyed"
+            className="mt-1 w-full rounded-md border px-3 py-2"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Short damage summary (shown on cards & quick facts). Keep it brief.
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium">Thumbnail</label>
           <div className="mt-2 flex items-center gap-3">
@@ -706,7 +721,8 @@ export default function NewReportPage() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        {/* Origin / Destination / Site / Region (region added) */}
+        <div className="grid grid-cols-4 gap-3">
           <input
             value={form.origin}
             onChange={(e) => updateField('origin', e.target.value)}
@@ -723,6 +739,12 @@ export default function NewReportPage() {
             value={form.site}
             onChange={(e) => updateField('site', e.target.value)}
             placeholder="Site / location"
+            className="rounded-md border px-3 py-2"
+          />
+          <input
+            value={form.region}
+            onChange={(e) => updateField('region', e.target.value)}
+            placeholder="Region"
             className="rounded-md border px-3 py-2"
           />
         </div>

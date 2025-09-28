@@ -814,7 +814,8 @@ export default function EditReportPage() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        {/* Origin / Destination / Site / Region (region added) */}
+        <div className="grid grid-cols-4 gap-3">
           <input
             value={form.origin}
             onChange={(e) => updateField('origin', e.target.value)}
@@ -831,6 +832,12 @@ export default function EditReportPage() {
             value={form.site}
             onChange={(e) => updateField('site', e.target.value)}
             placeholder="Site / location"
+            className="rounded-md border px-3 py-2"
+          />
+          <input
+            value={form.region}
+            onChange={(e) => updateField('region', e.target.value)}
+            placeholder="Region"
             className="rounded-md border px-3 py-2"
           />
         </div>
@@ -856,6 +863,18 @@ export default function EditReportPage() {
             onChange={(e) => updateField('survivors', e.target.value)}
             placeholder="Survivors"
             className="rounded-md border px-3 py-2"
+          />
+        </div>
+
+        {/* --- Damage field --- */}
+        <div>
+          <label className="block text-sm font-medium">Damage</label>
+          <textarea
+            value={form.damage}
+            onChange={(e) => updateField('damage', e.target.value)}
+            rows={3}
+            placeholder="Describe damage (brief summary or details)"
+            className="mt-1 w-full rounded-md border px-3 py-2"
           />
         </div>
 
