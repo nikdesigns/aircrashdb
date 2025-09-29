@@ -97,11 +97,13 @@ export default function NewReportPage() {
     type: '',
     date: '',
     flightNumber: '',
+    callsign: '',
     aircraft: '',
     registration: '',
     operator: '',
     origin: '',
     destination: '',
+    route: '',
     site: '',
     region: '',
     fatalities: '',
@@ -115,6 +117,8 @@ export default function NewReportPage() {
     thumbnail: '',
     images: [] as ImgItem[],
     attachments: [] as Attachment[],
+    videos: [] as string[],
+    externalLinks: [] as string[],
     reportDocument: '',
     phaseOfFlight: '',
     probableCause: '',
@@ -125,9 +129,19 @@ export default function NewReportPage() {
       status?: string;
     }[],
     investigationBodies: [] as string[],
+    references: [] as {
+      title?: string;
+      url?: string;
+      publisher?: string;
+      date?: string;
+    }[],
     tags: [] as string[],
+    author: '',
     verified: false,
-    geo: null as any,
+    views: 0,
+    relatedReports: [] as string[],
+    timeline: [] as { time?: string; title: string; detail?: string }[],
+    geo: { lat: '', lng: '' },
   });
 
   const [loading, setLoading] = useState(false);
@@ -137,7 +151,6 @@ export default function NewReportPage() {
     text: string;
   } | null>(null);
 
-  // react-quill modules (image handler uses uploadToCloudinary)
   const modules = useMemo(
     () => ({
       toolbar: {
@@ -165,10 +178,17 @@ export default function NewReportPage() {
                 const range = quill.getSelection(true);
                 quill.insertEmbed(range.index, 'image', url);
                 quill.setSelection(range.index + 1);
-                // add to gallery automatically
                 setForm((p: any) => ({
                   ...p,
-                  images: [...(p.images || []), { url, caption: '' }],
+                  images: [
+                    ...(p.images || []),
+                    {
+                      url,
+                      caption: '',
+                      credit: '',
+                      order: (p.images || []).length,
+                    },
+                  ],
                 }));
               } catch (err: any) {
                 console.error('Editor upload', err);
@@ -205,8 +225,7 @@ export default function NewReportPage() {
     []
   );
 
-  // helpers
-  function updateField<K extends string>(key: K, value: any) {
+  function updateField(key: string, value: any) {
     setForm((p: any) => ({ ...p, [key]: value }));
   }
 
@@ -244,7 +263,12 @@ export default function NewReportPage() {
       const uploaded: ImgItem[] = [];
       for (const f of files) {
         const url = await uploadToCloudinary(f);
-        uploaded.push({ url, caption: '' });
+        uploaded.push({
+          url,
+          caption: '',
+          credit: '',
+          order: (form.images || []).length + uploaded.length,
+        });
       }
       updateField('images', [...(form.images || []), ...uploaded]);
     } catch (err: any) {
@@ -296,11 +320,17 @@ export default function NewReportPage() {
     }
   }
 
-  // gallery helpers
   function setImageCaption(i: number, caption: string) {
     setForm((p: any) => {
       const imgs = (p.images || []).slice();
       imgs[i] = { ...(imgs[i] || {}), caption };
+      return { ...p, images: imgs };
+    });
+  }
+  function setImageCredit(i: number, credit: string) {
+    setForm((p: any) => {
+      const imgs = (p.images || []).slice();
+      imgs[i] = { ...(imgs[i] || {}), credit };
       return { ...p, images: imgs };
     });
   }
@@ -311,7 +341,13 @@ export default function NewReportPage() {
     }));
   }
 
-  // attachments helpers
+  function setAttachmentCaption(i: number, caption: string) {
+    setForm((p: any) => {
+      const arr = (p.attachments || []).slice();
+      arr[i] = { ...(arr[i] || {}), caption };
+      return { ...p, attachments: arr };
+    });
+  }
   function removeAttachment(i: number) {
     setForm((p: any) => ({
       ...p,
@@ -321,7 +357,6 @@ export default function NewReportPage() {
     }));
   }
 
-  // safety recommendations
   function addRecommendation() {
     updateField('safetyRecommendations', [
       ...(form.safetyRecommendations || []),
@@ -344,7 +379,50 @@ export default function NewReportPage() {
     }));
   }
 
-  // geo helpers
+  // references
+  function addReference() {
+    updateField('references', [
+      ...(form.references || []),
+      { title: '', url: '', publisher: '', date: '' },
+    ]);
+  }
+  function setReference(i: number, key: string, value: any) {
+    setForm((p: any) => {
+      const arr = (p.references || []).slice();
+      arr[i] = { ...(arr[i] || {}), [key]: value };
+      return { ...p, references: arr };
+    });
+  }
+  function removeReference(i: number) {
+    setForm((p: any) => ({
+      ...p,
+      references: (p.references || []).filter(
+        (_: any, idx: number) => idx !== i
+      ),
+    }));
+  }
+
+  // timeline helpers
+  function addTimelineItem() {
+    updateField('timeline', [
+      ...(form.timeline || []),
+      { time: '', title: '', detail: '' },
+    ]);
+  }
+  function setTimelineItem(i: number, key: string, value: any) {
+    setForm((p: any) => {
+      const arr = (p.timeline || []).slice();
+      arr[i] = { ...(arr[i] || {}), [key]: value };
+      return { ...p, timeline: arr };
+    });
+  }
+  function removeTimelineItem(i: number) {
+    setForm((p: any) => ({
+      ...p,
+      timeline: (p.timeline || []).filter((_: any, idx: number) => idx !== i),
+    }));
+  }
+
   function setGeoLat(v: string) {
     const lat = v === '' ? '' : Number(v);
     setForm((p: any) => ({ ...p, geo: { ...(p.geo || {}), lat } }));
@@ -363,8 +441,7 @@ export default function NewReportPage() {
     setMsg(null);
 
     try {
-      // prepare payload
-      const payload = {
+      const payload: any = {
         title: form.title,
         slug:
           form.slug ||
@@ -375,11 +452,13 @@ export default function NewReportPage() {
         type: form.type,
         date: form.date || undefined,
         flightNumber: form.flightNumber,
+        callsign: form.callsign,
         aircraft: form.aircraft,
         registration: form.registration,
         operator: form.operator,
         origin: form.origin,
         destination: form.destination,
+        route: form.route,
         site: form.site,
         region: form.region,
         fatalities:
@@ -396,6 +475,7 @@ export default function NewReportPage() {
           url: it.url,
           caption: it.caption || '',
           credit: it.credit || '',
+          order: typeof it.order === 'number' ? it.order : undefined,
         })),
         attachments: (form.attachments || []).map((it: any) => ({
           url: it.url,
@@ -403,6 +483,8 @@ export default function NewReportPage() {
           type: it.type || '',
           caption: it.caption || '',
         })),
+        videos: form.videos || [],
+        externalLinks: form.externalLinks || [],
         reportDocument: form.reportDocument || '',
         phaseOfFlight: form.phaseOfFlight,
         probableCause: form.probableCause,
@@ -415,10 +497,41 @@ export default function NewReportPage() {
           })
         ),
         investigationBodies: form.investigationBodies || [],
+        references: (form.references || []).map((r: any) => ({
+          title: r.title || '',
+          url: r.url || '',
+          publisher: r.publisher || '',
+          date: r.date || null,
+        })),
         tags: form.tags || [],
+        author: form.author || '',
         verified: !!form.verified,
-        geo: form.geo || null,
+        views:
+          typeof form.views === 'number' ? form.views : Number(form.views) || 0,
+        relatedReports: form.relatedReports || [],
+        timeline: (form.timeline || []).map((t: any) => ({
+          time: t.time || '',
+          title: t.title || '',
+          detail: t.detail || '',
+        })),
+        // send geo as GeoJSON Point if valid
+        geo:
+          form.geo &&
+          typeof form.geo.lat === 'number' &&
+          Number.isFinite(form.geo.lat) &&
+          typeof form.geo.lng === 'number' &&
+          Number.isFinite(form.geo.lng)
+            ? {
+                type: 'Point',
+                coordinates: [Number(form.geo.lng), Number(form.geo.lat)],
+              }
+            : null,
       };
+
+      // remove undefined props
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === undefined) delete payload[k];
+      });
 
       const res = await fetch('/api/reports', {
         method: 'POST',
@@ -538,20 +651,6 @@ export default function NewReportPage() {
           />
         </div>
 
-        {/* NEW: Damage input */}
-        <div>
-          <label className="block text-sm font-medium">Damage</label>
-          <input
-            value={form.damage}
-            onChange={(e) => updateField('damage', e.target.value)}
-            placeholder="e.g. Minor, Substantial, Destroyed"
-            className="mt-1 w-full rounded-md border px-3 py-2"
-          />
-          <p className="text-xs text-slate-400 mt-1">
-            Short damage summary (shown on cards & quick facts). Keep it brief.
-          </p>
-        </div>
-
         <div>
           <label className="block text-sm font-medium">Thumbnail</label>
           <div className="mt-2 flex items-center gap-3">
@@ -597,7 +696,33 @@ export default function NewReportPage() {
                       onChange={(e) => setImageCaption(i, e.target.value)}
                       className="mt-2 w-full rounded border px-2 py-1 text-sm"
                     />
-                    <div className="mt-2 flex justify-end">
+                    <input
+                      type="text"
+                      placeholder="Credit"
+                      value={it.credit ?? ''}
+                      onChange={(e) => setImageCredit(i, e.target.value)}
+                      className="mt-2 w-full rounded border px-2 py-1 text-sm"
+                    />
+                    <div className="mt-2 flex justify-between items-center">
+                      <div className="text-xs text-slate-400">
+                        Order:{' '}
+                        <input
+                          type="number"
+                          value={it.order ?? i}
+                          onChange={(e) => {
+                            const order =
+                              e.target.value === ''
+                                ? undefined
+                                : Number(e.target.value);
+                            setForm((p: any) => {
+                              const imgs = (p.images || []).slice();
+                              imgs[i] = { ...imgs[i], order };
+                              return { ...p, images: imgs };
+                            });
+                          }}
+                          className="inline-block w-16 ml-2 rounded border px-2 py-1 text-xs"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeGalleryImage(i)}
@@ -638,6 +763,15 @@ export default function NewReportPage() {
                       <div className="text-xs text-slate-500">
                         {a.type || 'file'}
                       </div>
+                      <input
+                        type="text"
+                        value={a.caption ?? ''}
+                        onChange={(e) =>
+                          setAttachmentCaption(i, e.target.value)
+                        }
+                        placeholder="Caption"
+                        className="mt-1 rounded border px-2 py-1 text-sm w-full"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
                       <a
@@ -721,7 +855,6 @@ export default function NewReportPage() {
           />
         </div>
 
-        {/* Origin / Destination / Site / Region (region added) */}
         <div className="grid grid-cols-4 gap-3">
           <input
             value={form.origin}
@@ -770,6 +903,17 @@ export default function NewReportPage() {
             onChange={(e) => updateField('survivors', e.target.value)}
             placeholder="Survivors"
             className="rounded-md border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Damage</label>
+          <textarea
+            value={form.damage}
+            onChange={(e) => updateField('damage', e.target.value)}
+            rows={3}
+            placeholder="Describe damage (brief summary or details)"
+            className="mt-1 w-full rounded-md border px-3 py-2"
           />
         </div>
 
@@ -823,6 +967,56 @@ export default function NewReportPage() {
                 className="rounded border px-3 py-1 text-sm"
               >
                 Add recommendation
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline UI */}
+        <div>
+          <label className="block text-sm font-medium">Timeline</label>
+          <div className="mt-2 space-y-2">
+            {(form.timeline || []).map((t: any, i: number) => (
+              <div key={i} className="rounded border p-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    value={t.time || ''}
+                    onChange={(e) => setTimelineItem(i, 'time', e.target.value)}
+                    placeholder="Time (e.g. 10:23 UTC / 2024-12-29 10:23)"
+                    className="rounded border px-2 py-1"
+                  />
+                  <input
+                    value={t.title || ''}
+                    onChange={(e) =>
+                      setTimelineItem(i, 'title', e.target.value)
+                    }
+                    placeholder="Title (short)"
+                    className="rounded border px-2 py-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeTimelineItem(i)}
+                    className="text-sm text-rose-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  value={t.detail || ''}
+                  onChange={(e) => setTimelineItem(i, 'detail', e.target.value)}
+                  placeholder="Detail (expand on what happened)"
+                  className="mt-2 w-full rounded border px-2 py-1"
+                  rows={3}
+                />
+              </div>
+            ))}
+            <div>
+              <button
+                type="button"
+                onClick={addTimelineItem}
+                className="rounded border px-3 py-1 text-sm"
+              >
+                Add timeline item
               </button>
             </div>
           </div>

@@ -21,12 +21,14 @@ type Attachment = {
 };
 type SafetyRec = { body: string; issuedTo?: string; status?: string };
 
+type TimelineItem = { time?: string; title: string; detail?: string };
+
 type ReportForClient = {
   id: string;
   slug?: string | null;
   title?: string | null;
-  date?: string | null; // ISO string (serializable)
-  dateFormatted?: string | null; // server-side human friendly string (precomputed)
+  date?: string | null;
+  dateFormatted?: string | null;
   type?: string | null;
   status?: string | null;
   summary?: string | null;
@@ -53,8 +55,12 @@ type ReportForClient = {
   tags?: string[] | null;
   investigationBodies?: string[] | null;
   contributingFactors?: string[] | null;
-  timeline?: { time?: string; title: string; detail?: string }[] | null;
+  timeline?: TimelineItem[] | null;
   probableCause?: string | null;
+  // extended fields:
+  weather?: any;
+  aircraftDetails?: any;
+  eyewitnesses?: any[];
 };
 
 export default function ReportDetailPage({
@@ -105,6 +111,18 @@ export default function ReportDetailPage({
     [report, images]
   );
 
+  const hasGeo = !!(
+    report.geo &&
+    typeof report.geo.lat === 'number' &&
+    typeof report.geo.lng === 'number'
+  );
+
+  const mapsLink = hasGeo
+    ? `https://www.openstreetmap.org/?mlat=${report.geo!.lat}&mlon=${report.geo!.lng}#map=12/${report.geo!.lat}/${report.geo!.lng}`
+    : null;
+
+  const timeline = report.timeline ?? [];
+
   return (
     <>
       <Head>
@@ -133,7 +151,6 @@ export default function ReportDetailPage({
         <article className="mb-8">
           <div className="rounded-xl bg-white border border-slate-100 p-6 shadow-sm">
             <div className="md:flex md:items-start md:gap-6">
-              {/* Left column */}
               <div className="md:w-3/5">
                 {report.thumbnail ? (
                   <Image
@@ -150,7 +167,6 @@ export default function ReportDetailPage({
                 )}
 
                 <div className="mt-4 text-sm text-slate-500 flex items-center gap-3 flex-wrap">
-                  {/* use server-provided formatted date to avoid hydration mismatch */}
                   <div>
                     {report.dateFormatted ??
                       (report.date ? fmtDate(report.date) : '—')}
@@ -158,7 +174,11 @@ export default function ReportDetailPage({
                   <div>·</div>
                   <div className="inline-flex items-center gap-2">
                     <span
-                      className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${report.type?.toLowerCase().includes('accident') ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}
+                      className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${
+                        (report.type || '').toLowerCase().includes('accident')
+                          ? 'bg-rose-100 text-rose-700'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
                     >
                       {report.type ?? '—'}
                     </span>
@@ -173,7 +193,6 @@ export default function ReportDetailPage({
                 )}
               </div>
 
-              {/* Right column */}
               <aside className="mt-4 md:mt-0 md:w-2/5">
                 <div className="rounded-md border border-slate-100 bg-slate-50 p-4">
                   <h2 className="text-sm font-semibold text-slate-800">
@@ -271,10 +290,8 @@ export default function ReportDetailPage({
           </div>
         </article>
 
-        {/* Content + RHS widgets */}
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-2 space-y-6">
-            {/* Full content */}
             <section id="report-content" className="prose max-w-none">
               <div
                 dangerouslySetInnerHTML={{
@@ -352,7 +369,7 @@ export default function ReportDetailPage({
               </section>
             )}
 
-            {/* PDF preview */}
+            {/* Official PDF */}
             {report.reportDocument && (
               <section>
                 <h3 className="text-lg font-semibold mb-3">
@@ -390,9 +407,77 @@ export default function ReportDetailPage({
                   </div>
                 </section>
               )}
+
+            {/* Beautiful vertical timeline (new) */}
+            {timeline && timeline.length > 0 && (
+              <section>
+                <h3 className="text-lg font-semibold mb-4">Timeline</h3>
+
+                <div className="relative">
+                  {/* vertical line */}
+                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200 hidden sm:block" />
+                  <ul className="space-y-6">
+                    {timeline.map((t, i) => (
+                      <li key={i} className="flex gap-4 items-start">
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
+                            {i + 1}
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm text-slate-500">
+                            {t.time ?? ''}
+                          </div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {t.title}
+                          </div>
+                          {t.detail && (
+                            <div className="mt-1 text-sm text-slate-700">
+                              {t.detail}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* extended */}
+            {report.weather && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3">Weather</h3>
+                <pre className="rounded border p-3 bg-white text-sm overflow-auto">
+                  {JSON.stringify(report.weather, null, 2)}
+                </pre>
+              </section>
+            )}
+
+            {report.aircraftDetails && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3">Aircraft details</h3>
+                <pre className="rounded border p-3 bg-white text-sm overflow-auto">
+                  {JSON.stringify(report.aircraftDetails, null, 2)}
+                </pre>
+              </section>
+            )}
+
+            {report.eyewitnesses && report.eyewitnesses.length > 0 && (
+              <section>
+                <h3 className="text-lg font-semibold mb-3">Eyewitnesses</h3>
+                <ul className="list-disc pl-5">
+                  {report.eyewitnesses.map((e, i) => (
+                    <li key={i} className="text-sm text-slate-700">
+                      {typeof e === 'string' ? e : JSON.stringify(e)}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
 
-          {/* Sidebar */}
+          {/* RIGHT SIDEBAR (sticky) */}
           <aside className="md:col-span-1 space-y-6">
             <div className="rounded-md border border-slate-100 bg-white p-4">
               <h4 className="text-sm font-semibold text-slate-800">
@@ -401,6 +486,13 @@ export default function ReportDetailPage({
               <div className="mt-2 text-sm text-slate-600">
                 {report.investigationStatus ?? '—'}
               </div>
+
+              {report.dateFormatted && (
+                <div className="mt-3 text-xs text-slate-400">
+                  Published:{' '}
+                  <span className="text-slate-700">{report.dateFormatted}</span>
+                </div>
+              )}
 
               {report.investigationBodies &&
                 report.investigationBodies.length > 0 && (
@@ -437,15 +529,68 @@ export default function ReportDetailPage({
                     </div>
                   </div>
                 )}
+
+              {hasGeo && (
+                <div className="mt-3">
+                  <div className="text-xs text-slate-400">Coordinates</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    Lat {report.geo!.lat}, Lng {report.geo!.lng}
+                  </div>
+                  {mapsLink && (
+                    <a
+                      href={mapsLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-sm rounded border px-3 py-1"
+                    >
+                      View on map
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {report.reportDocument && (
+                <div className="mt-3">
+                  <div className="text-xs text-slate-400">Official report</div>
+                  <div className="mt-2 flex gap-2">
+                    <a
+                      href={report.reportDocument}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded border px-3 py-1 text-sm"
+                    >
+                      Open
+                    </a>
+                    <a
+                      href={report.reportDocument}
+                      download
+                      className="rounded border px-3 py-1 text-sm"
+                    >
+                      Download
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
             <ReportTOC rootId="report-content" />
-            <Timeline items={report.timeline ?? []} />
-            <RelatedReports
-              operator={report.operator}
-              tags={report.tags}
-              currentId={report.id}
-            />
+            <div className="rounded-md border border-slate-100 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Timeline</h4>
+              <div className="mt-3">
+                <Timeline items={report.timeline ?? []} compact />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-slate-100 bg-white p-4">
+              <h4 className="text-sm font-semibold text-slate-800">Related</h4>
+              <div className="mt-3">
+                <RelatedReports
+                  operator={report.operator}
+                  tags={report.tags}
+                  currentId={report.id}
+                />
+              </div>
+            </div>
           </aside>
         </div>
 
@@ -473,6 +618,56 @@ function safeDateToIso(d: any) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+/**
+ * Normalize timeline stored in different shapes:
+ * - array of objects { time, title, detail }
+ * - JSON stringified array
+ * - array of strings -> try split
+ */
+function normalizeTimeline(raw: any): TimelineItem[] {
+  if (!raw) return [];
+  // If string that seems like JSON
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return normalizeTimeline(parsed);
+    } catch {
+      // fallback: split into lines
+      const lines = raw
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      return lines.map((l) => ({ title: l }));
+    }
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((it) => {
+        if (!it) return null;
+        if (typeof it === 'string') {
+          return { title: it };
+        }
+        // if object with keys
+        const time = it.time ?? it.t ?? it.timestamp ?? '';
+        const title =
+          it.title ??
+          it.headline ??
+          it.event ??
+          (typeof it === 'object' && it[0] ? String(it[0]) : '');
+        const detail = it.detail ?? it.description ?? it.desc ?? it.body ?? '';
+        if (!title && !detail && !time) return null;
+        return {
+          time: String(time || '').trim(),
+          title: String(title || '').trim(),
+          detail: String(detail || '').trim(),
+        };
+      })
+      .filter(Boolean) as TimelineItem[];
+  }
+  // unknown shape
+  return [];
+}
+
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   try {
     await dbConnect();
@@ -495,6 +690,30 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
           day: 'numeric',
         })
       : null;
+
+    // robust geo handling:
+    let geo = null;
+    if (doc.geo) {
+      // If GeoJSON like: { type: 'Point', coordinates: [lng, lat] }
+      if (doc.geo.coordinates && Array.isArray(doc.geo.coordinates)) {
+        const lng = doc.geo.coordinates[0];
+        const lat = doc.geo.coordinates[1];
+        geo = {
+          lat: typeof lat === 'number' ? lat : null,
+          lng: typeof lng === 'number' ? lng : null,
+        };
+      } else if (
+        typeof doc.geo.lat !== 'undefined' ||
+        typeof doc.geo.lng !== 'undefined'
+      ) {
+        geo = { lat: doc.geo.lat ?? null, lng: doc.geo.lng ?? null };
+      } else {
+        geo = null;
+      }
+    }
+
+    const rawTimeline = doc.timeline ?? null;
+    const timeline = normalizeTimeline(rawTimeline);
 
     const report: ReportForClient = {
       id: doc._id?.toString(),
@@ -531,9 +750,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       destination: doc.destination ?? null,
       site: doc.site ?? null,
       region: doc.region ?? null,
-      geo: doc.geo
-        ? { lat: doc.geo.lat ?? null, lng: doc.geo.lng ?? null }
-        : null,
+      geo,
       fatalities:
         typeof doc.fatalities !== 'undefined' && doc.fatalities !== null
           ? doc.fatalities
@@ -562,14 +779,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       contributingFactors: Array.isArray(doc.contributingFactors)
         ? doc.contributingFactors
         : [],
-      timeline: Array.isArray(doc.timeline)
-        ? doc.timeline.map((t: any) => ({
-            time: t.time ?? '',
-            title: t.title ?? '',
-            detail: t.detail ?? '',
-          }))
-        : [],
+      timeline,
       probableCause: doc.probableCause ?? null,
+      // extended fields
+      weather: doc.weather ?? null,
+      aircraftDetails: doc.aircraftDetails ?? null,
+      eyewitnesses: doc.eyewitnesses ?? [],
     };
 
     return { props: { report } };

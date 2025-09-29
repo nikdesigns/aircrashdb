@@ -1,294 +1,310 @@
 // pages/search.tsx
-'use client';
-
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { Label } from '@/components/Label'; // ✅ named import
+import Image from 'next/image';
+import { formatDateDeterministic as fmtDate } from '@/utils/formatDate';
 
-type Report = {
-  id: string;
-  type: string;
-  date: string;
-  summary?: string;
-  site?: string;
-  aircraft?: string;
-  operator?: string;
-  fatalities?: number;
-  injuries?: number;
-  survivors?: number;
-  origin?: string;
-  destination?: string;
+type ReportRow = {
+  _id?: string;
+  id?: string;
+  slug?: string | null;
+  title?: string | null;
+  date?: string | null;
+  summary?: string | null;
+  thumbnail?: string | null;
+  type?: string | null;
+  operator?: string | null;
+  site?: string | null;
+  aircraft?: string | null;
+  origin?: string | null;
+  destination?: string | null;
+  fatalities?: number | null;
+  injuries?: number | null;
+  survivors?: number | null;
+  damage?: string | null;
 };
 
-const PAGE_LIMIT = 10;
+function getBadgeClass(type?: string) {
+  if (!type) return 'bg-slate-100 text-slate-700';
+  switch (type.toLowerCase()) {
+    case 'accident':
+      return 'bg-rose-100 text-rose-700';
+    case 'disappearance':
+      return 'bg-violet-100 text-violet-700';
+    case 'incident':
+      return 'bg-amber-100 text-amber-700';
+    default:
+      return 'bg-slate-100 text-slate-700';
+  }
+}
 
 export default function SearchPage() {
   const router = useRouter();
-  const { q } = router.query;
-  const [mounted, setMounted] = useState(false);
-  const query = mounted && typeof q === 'string' ? q.trim() : '';
+  // Use only the nav-provided query param (no local search input rendered here)
+  const qParam =
+    typeof router.query.q === 'string' ? router.query.q.trim() : '';
 
-  const [results, setResults] = useState<Report[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
+  const [results, setResults] = useState<ReportRow[]>([]); // always array
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => setMounted(true), []);
+  const [limit, setLimit] = useState<number>(50);
 
   useEffect(() => {
-    setOffset(0);
-    setResults([]);
-    setTotal(null);
-  }, [query]);
+    // If no query, clear results and don't fetch
+    if (!qParam) {
+      setResults([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    if (!mounted) return;
-    const controller = new AbortController();
-    async function fetchResults() {
+    let mounted = true;
+    (async () => {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams();
-        if (query) params.set('q', query);
-        params.set('limit', String(PAGE_LIMIT));
-        params.set('offset', String(offset));
-
-        const res = await fetch(`/api/reports?${params.toString()}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`API error ${res.status}`);
-        const json = await res.json();
-        setResults((prev) =>
-          offset === 0 ? json.results : prev.concat(json.results)
+        const encoded = encodeURIComponent(qParam);
+        const res = await fetch(
+          `/api/reports?search=${encoded}&limit=${limit}`
         );
-        setTotal(json.total);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Search failed: ${res.status}`);
+        }
+        const json = await res.json();
+        if (!mounted) return;
+        const list = Array.isArray(json.reports) ? json.reports : [];
+        setResults(list);
       } catch (err: any) {
-        if (err.name === 'AbortError') return;
-        setError(err.message ?? 'Fetch error');
+        if (!mounted) return;
+        console.error('search error', err);
+        setError(err?.message ?? 'Search failed');
+        setResults([]);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
-    }
-    fetchResults();
-    return () => controller.abort();
-  }, [query, offset, mounted]);
+    })();
 
-  const canLoadMore = total === null ? false : offset + PAGE_LIMIT < total;
+    return () => {
+      mounted = false;
+    };
+  }, [qParam, limit]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Search results</h1>
-        <p className="text-sm text-slate-600 mt-1">
-          {!mounted ? (
-            'Loading query…'
-          ) : query ? (
-            <>
-              Showing results for <span className="font-medium">{query}</span>
-            </>
-          ) : (
-            'Showing all reports'
-          )}
-        </p>
-      </div>
+    <>
+      <Head>
+        <title>Search — AirCrashDB</title>
+      </Head>
 
-      <main className="space-y-4">
-        {error && (
-          <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Error: {error}
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold">Search results</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Results for: <span className="font-medium">{qParam || '—'}</span>
+          </p>
+        </header>
+
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="text-sm text-slate-600">
+            {loading
+              ? 'Searching…'
+              : error
+                ? `Error: ${error}`
+                : `Results: ${results.length}`}
           </div>
-        )}
 
-        {loading && results.length === 0 && (
-          <div className="rounded border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
-            Loading…
-          </div>
-        )}
-
-        {results.length === 0 && !loading && !error && (
-          <div className="rounded border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
-            No results
-            {query ? (
-              <>
-                {' '}
-                for <strong>{query}</strong>
-              </>
-            ) : (
-              ''
-            )}
-            .
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {results.map((r) => (
-            <article
-              key={r.id}
-              className="rounded border border-slate-200 bg-white p-4 shadow-sm"
+          {/* optional limit selector — remove if you don't want it */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Per page</label>
+            <select
+              value={String(limit)}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="rounded-md border px-2 py-1 text-sm"
             >
-              <div className="flex items-center justify-between">
-                <div
-                  className={`rounded px-2 py-0.5 text-xs font-semibold ${getBadgeClass(r.type)}`}
-                >
-                  {r.type}
-                </div>
-                <span className="text-sm text-slate-500">{r.date}</span>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-700 line-clamp-2">
-                {r.summary}
-              </p>
-
-              <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-xs">
-                <Label icon={Icon.site} label="Site" value={r.site} />
-                <Label
-                  icon={Icon.aircraft}
-                  label="Aircraft"
-                  value={r.aircraft}
-                />
-                <Label
-                  icon={Icon.operator}
-                  label="Operator"
-                  value={r.operator}
-                />
-                <Label
-                  icon={Icon.fatalities}
-                  label="Fatalities"
-                  value={r.fatalities}
-                />
-                <Label
-                  icon={Icon.injuries}
-                  label="Injuries"
-                  value={r.injuries}
-                />
-                <Label
-                  icon={Icon.survivors}
-                  label="Survivors"
-                  value={r.survivors}
-                />
-                <Label icon={Icon.origin} label="Origin" value={r.origin} />
-                <Label
-                  icon={Icon.destination}
-                  label="Destination"
-                  value={r.destination}
-                />
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <Link
-                  href={`/reports/${r.id}`}
-                  className="rounded bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100"
-                >
-                  Read
-                </Link>
-              </div>
-            </article>
-          ))}
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
         </div>
 
-        {canLoadMore && (
-          <div className="text-center">
-            <button
-              onClick={() => setOffset((o) => o + PAGE_LIMIT)}
-              disabled={loading}
-              className="rounded bg-slate-100 px-4 py-2 text-sm hover:bg-slate-200"
-            >
-              {loading ? 'Loading…' : 'Show more'}
-            </button>
+        {/* No results state */}
+        {Array.isArray(results) &&
+          results.length === 0 &&
+          !loading &&
+          !error && (
+            <div className="rounded border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
+              No results
+              {qParam ? (
+                <div className="mt-2">
+                  No reports found matching “{qParam}”.
+                </div>
+              ) : (
+                <div className="mt-2">
+                  Use the search box in the navigation to search the archive.
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Results list */}
+        {Array.isArray(results) && results.length > 0 && (
+          <div className="grid gap-4">
+            {results.map((r) => {
+              const id = r._id ?? r.id;
+              const href = `/reports/${r.slug ?? id}`;
+              return (
+                <Link key={String(id)} href={href} className="block group">
+                  <article className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow duration-150">
+                    <div className="flex items-start gap-4">
+                      <div className="w-28 h-20 flex-shrink-0 rounded overflow-hidden bg-slate-50">
+                        {r.thumbnail ? (
+                          <Image
+                            src={r.thumbnail}
+                            alt={r.title ?? 'thumbnail'}
+                            width={560}
+                            height={320}
+                            className="object-cover w-full h-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                            No image
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="text-base font-semibold text-slate-900 truncate group-hover:underline">
+                              {r.title ?? '—'}
+                            </h3>
+
+                            <p
+                              className="mt-1 text-xs text-slate-500"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {r.summary ?? ''}
+                            </p>
+                          </div>
+
+                          <div className="text-sm text-slate-500 whitespace-nowrap text-right">
+                            <div>{r.date ? fmtDate(r.date) : '—'}</div>
+                            <div
+                              className={`mt-2 inline-block rounded px-2 py-0.5 text-xs font-semibold ${getBadgeClass(
+                                r.type
+                              )}`}
+                            >
+                              {r.type ?? '—'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-2 text-xs text-slate-700">
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Site
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.site ?? '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Aircraft
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.aircraft ?? '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Operator
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.operator ?? '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Fatalities
+                            </div>
+                            <div className="text-xs font-medium text-slate-800">
+                              {typeof r.fatalities === 'number'
+                                ? r.fatalities
+                                : '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Injuries
+                            </div>
+                            <div className="text-xs font-medium text-slate-800">
+                              {typeof r.injuries === 'number'
+                                ? r.injuries
+                                : '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Survivors
+                            </div>
+                            <div className="text-xs font-medium text-slate-800">
+                              {typeof r.survivors === 'number'
+                                ? r.survivors
+                                : '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Origin
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.origin ?? '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Destination
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.destination ?? '—'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="text-[10px] text-slate-400">
+                              Damage
+                            </div>
+                            <div className="text-xs font-medium text-slate-800 truncate">
+                              {r.damage ?? '—'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </Link>
+              );
+            })}
           </div>
         )}
       </main>
-    </div>
+    </>
   );
 }
-
-function getBadgeClass(type?: string) {
-  const lower = (type || '').toLowerCase();
-  if (lower === 'accident') return 'bg-red-100 text-red-700';
-  if (lower === 'serious incident') return 'bg-orange-100 text-orange-700';
-  if (lower === 'disappearance') return 'bg-gray-200 text-gray-700';
-  return 'bg-blue-100 text-blue-700';
-}
-
-const Icon = {
-  site: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <path
-        d="M12 2C8 5 5 8 5 11c0 5 7 11 7 11s7-6 7-11c0-3-3-6-7-9z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <circle cx="12" cy="11" r="2" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  aircraft: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <path
-        d="M2 12h6l4-3 4 3h6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12 3v5M8 21l4-4 4 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-  operator: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <circle cx="12" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M5 21c1.5-4 5-6 7-6s5.5 2 7 6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </svg>
-  ),
-  fatalities: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M12 4v8l4 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-  injuries: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <path d="M3 12h18M12 3v18" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  survivors: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M4 22a8 8 0 0116 0" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  origin: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <path
-        d="M2 12h7l3 6 3-12 7 6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-  destination: (
-    <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24">
-      <path
-        d="M21 3l-6 18-3-6-6 3 15-15z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
-};

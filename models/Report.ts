@@ -40,10 +40,19 @@ const ReferenceSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const GeoSchema = new mongoose.Schema(
+// GeoJSON Point for 2dsphere index
+const GeoJSONPointSchema = new mongoose.Schema(
   {
-    lat: Number,
-    lng: Number,
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+      required: true,
+    },
+    coordinates: {
+      type: [Number], // [lng, lat]
+      required: true,
+    },
   },
   { _id: false }
 );
@@ -79,7 +88,7 @@ const ReportSchema = new mongoose.Schema(
 
     // location
     site: { type: String, default: '' },
-    geo: GeoSchema,
+    geo: { type: GeoJSONPointSchema, default: null },
     region: { type: String, default: '' },
 
     // narrative + media
@@ -101,6 +110,15 @@ const ReportSchema = new mongoose.Schema(
     investigationBodies: { type: [String], default: [] },
     reportDocument: { type: String, default: '' },
 
+    // extended fields (flexible)
+    aircraftDetails: { type: mongoose.Schema.Types.Mixed, default: null },
+    passengerBreakdown: { type: mongoose.Schema.Types.Mixed, default: null },
+    casualtyDetails: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    eyewitnesses: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    weather: { type: mongoose.Schema.Types.Mixed, default: null },
+    NOTAMs: { type: [String], default: [] },
+    emergencyResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+
     // indexing/admin
     tags: { type: [String], default: [] },
     references: { type: [ReferenceSchema], default: [] },
@@ -108,6 +126,21 @@ const ReportSchema = new mongoose.Schema(
     verified: { type: Boolean, default: false },
     views: { type: Number, default: 0 },
     relatedReports: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Report' }],
+
+    // editorial / seo
+    editors: { type: [String], default: [] },
+    publishedBy: { type: String, default: '' },
+    publishedAt: { type: Date, default: null },
+    embargoDate: { type: Date, default: null },
+    seo: { type: mongoose.Schema.Types.Mixed, default: null },
+
+    // misc
+    isFeatured: { type: Boolean, default: false },
+    severityScore: { type: Number, default: null },
+    readingTimeMin: { type: Number, default: null },
+    readingLevel: { type: String, default: null },
+    accessibilityTags: { type: [String], default: [] },
+    legalNotes: { type: String, default: '' },
 
     // audit
     createdAt: { type: Date, default: () => new Date() },
@@ -118,12 +151,13 @@ const ReportSchema = new mongoose.Schema(
   }
 );
 
-// text index for search
+// text index
 ReportSchema.index(
   { title: 'text', summary: 'text', content: 'text' },
   { weights: { title: 10, summary: 5, content: 1 } }
 );
-// optionally geo index if you populate geo
+
+// geo 2dsphere
 ReportSchema.index({ geo: '2dsphere' });
 
 export default mongoose.models.Report || mongoose.model('Report', ReportSchema);
