@@ -6,11 +6,17 @@ import { GetServerSideProps } from 'next';
 import ReportModel from '@/models/Report';
 import { dbConnect } from '@/lib/mongodb';
 
+import dynamic from 'next/dynamic';
 import ReportTOC from '@/components/ReportTOC';
 import Timeline from '@/components/Timeline';
 import RelatedReports from '@/components/RelatedReports';
 import Lightbox from '@/components/Lightbox';
 import { formatDateDeterministic as fmtDate } from '@/utils/formatDate';
+
+// Dynamic client-only import for FlightMap (prevents SSR errors)
+const FlightMap = dynamic(() => import('@/components/FlightMap'), {
+  ssr: false,
+});
 
 type ImgItem = { url: string | null; caption?: string; credit?: string };
 type Attachment = {
@@ -114,7 +120,9 @@ export default function ReportDetailPage({
   const hasGeo = !!(
     report.geo &&
     typeof report.geo.lat === 'number' &&
-    typeof report.geo.lng === 'number'
+    !Number.isNaN(report.geo.lat) &&
+    typeof report.geo.lng === 'number' &&
+    !Number.isNaN(report.geo.lng)
   );
 
   const mapsLink = hasGeo
@@ -122,6 +130,36 @@ export default function ReportDetailPage({
     : null;
 
   const timeline = report.timeline ?? [];
+
+  // Prepare a simple path array if you have origin/destination coordinates in aircraftDetails
+  // (We won't attempt geocoding of origin/destination names — only use numeric coords if present.)
+  const path: { lat: number; lng: number }[] = [];
+  // If aircraftDetails contains originCoords/destinationCoords (you can set these fields), include them
+  if (report.aircraftDetails?.originCoords) {
+    const o = report.aircraftDetails.originCoords;
+    if (
+      typeof o.lat === 'number' &&
+      typeof o.lng === 'number' &&
+      Number.isFinite(o.lat) &&
+      Number.isFinite(o.lng)
+    ) {
+      path.push({ lat: o.lat, lng: o.lng });
+    }
+  }
+  if (hasGeo) {
+    path.push({ lat: report.geo!.lat!, lng: report.geo!.lng! }); // crash site in middle (if hasGeo)
+  }
+  if (report.aircraftDetails?.destinationCoords) {
+    const d = report.aircraftDetails.destinationCoords;
+    if (
+      typeof d.lat === 'number' &&
+      typeof d.lng === 'number' &&
+      Number.isFinite(d.lat) &&
+      Number.isFinite(d.lng)
+    ) {
+      path.push({ lat: d.lat, lng: d.lng });
+    }
+  }
 
   return (
     <>
@@ -572,6 +610,27 @@ export default function ReportDetailPage({
                 </div>
               )}
             </div>
+
+            {/* --- Flight route / crash site map (client-only) --- */}
+            {/* Render only if we have either a crash site (hasGeo) or a path with >= 1 coords */}
+            {(hasGeo || path.length > 0) && (
+              <div className="rounded-md border border-slate-100 bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-800">
+                  Flight route
+                </h4>
+                <div className="mt-3 h-64">
+                  {/* FlightMap will safely render only in the browser and will handle invalid coords */}
+                  <FlightMap
+                    crashSite={
+                      hasGeo
+                        ? { lat: report.geo!.lat!, lng: report.geo!.lng! }
+                        : undefined
+                    }
+                    path={path.length >= 2 ? path : undefined}
+                  />
+                </div>
+              </div>
+            )}
 
             <ReportTOC rootId="report-content" />
             <div className="rounded-md border border-slate-100 bg-white p-4">
