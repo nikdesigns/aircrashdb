@@ -279,3 +279,43 @@ svg.animate-spin {
   border-radius: 6px;
   font-size: 0.9rem;
 }
+
+/* styles/globals.css (append) */
+
+/* FlightMap card wrapper - match card padding & look */
+.flightmap-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem; /* same as card */
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background: white;
+}
+
+/* empty placeholder look */
+.flightmap-card-empty {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+}
+
+/* Ensure svg occupies full card, with small inner margin so markers don't touch edges */
+.flightmap-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  padding: 9px; /* visual inset similar to other cards */
+  box-sizing: border-box;
+}

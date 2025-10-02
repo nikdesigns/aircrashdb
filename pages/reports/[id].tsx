@@ -8,8 +8,6 @@ import { dbConnect } from '@/lib/mongodb';
 
 import dynamic from 'next/dynamic';
 import ReportTOC from '@/components/ReportTOC';
-import Timeline from '@/components/Timeline';
-import RelatedReports from '@/components/RelatedReports';
 import Lightbox from '@/components/Lightbox';
 import { formatDateDeterministic as fmtDate } from '@/utils/formatDate';
 
@@ -233,6 +231,10 @@ export default function ReportDetailPage({
 
               <aside className="mt-4 md:mt-0 md:w-2/5">
                 <div className="rounded-md border border-slate-100 bg-slate-50 p-4">
+                  {/* 🔹 Added Title above Quick facts */}
+                  <h1 className="text-lg font-bold text-slate-900 mb-3">
+                    {report.title ?? 'Untitled Report'}
+                  </h1>
                   <h2 className="text-sm font-semibold text-slate-800">
                     Quick facts
                   </h2>
@@ -367,26 +369,28 @@ export default function ReportDetailPage({
             )}
 
             {/* Attachments */}
-            {report.attachments && report.attachments.length > 0 && (
+            {((report.attachments && report.attachments.length > 0) ||
+              report.reportDocument) && (
               <section>
                 <h3 className="text-lg font-semibold mb-3">Attachments</h3>
                 <div className="space-y-2">
-                  {report.attachments.map((a, i) => (
+                  {/* If there's a standalone official report PDF, show it as a downloadable attachment */}
+                  {report.reportDocument && (
                     <div
-                      key={a.url + i}
+                      key="official-report"
                       className="flex items-center justify-between gap-3 rounded border p-3 bg-white"
                     >
                       <div>
                         <div className="font-medium text-slate-800">
-                          {a.title || `Attachment ${i + 1}`}
+                          Official report (PDF)
                         </div>
                         <div className="text-xs text-slate-500">
-                          {a.type || ''} {a.caption ? `· ${a.caption}` : ''}
+                          PDF · Official investigation report
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <a
-                          href={a.url}
+                          href={report.reportDocument}
                           target="_blank"
                           rel="noreferrer"
                           className="rounded border px-3 py-1 text-sm"
@@ -394,7 +398,7 @@ export default function ReportDetailPage({
                           Open
                         </a>
                         <a
-                          href={a.url}
+                          href={report.reportDocument}
                           download
                           className="rounded border px-3 py-1 text-sm"
                         >
@@ -402,23 +406,41 @@ export default function ReportDetailPage({
                         </a>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
+                  )}
 
-            {/* Official PDF */}
-            {report.reportDocument && (
-              <section>
-                <h3 className="text-lg font-semibold mb-3">
-                  Official report (preview)
-                </h3>
-                <div className="rounded border overflow-hidden">
-                  <iframe
-                    src={report.reportDocument}
-                    className="w-full h-[560px]"
-                    title="Official report PDF"
-                  />
+                  {report.attachments &&
+                    report.attachments.map((a, i) => (
+                      <div
+                        key={a.url + i}
+                        className="flex items-center justify-between gap-3 rounded border p-3 bg-white"
+                      >
+                        <div>
+                          <div className="font-medium text-slate-800">
+                            {a.title || `Attachment ${i + 1}`}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {a.type || ''} {a.caption ? `· ${a.caption}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded border px-3 py-1 text-sm"
+                          >
+                            Open
+                          </a>
+                          <a
+                            href={a.url}
+                            download
+                            className="rounded border px-3 py-1 text-sm"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </section>
             )}
@@ -446,41 +468,7 @@ export default function ReportDetailPage({
                 </section>
               )}
 
-            {/* Beautiful vertical timeline (new) */}
-            {timeline && timeline.length > 0 && (
-              <section>
-                <h3 className="text-lg font-semibold mb-4">Timeline</h3>
-
-                <div className="relative">
-                  {/* vertical line */}
-                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200 hidden sm:block" />
-                  <ul className="space-y-6">
-                    {timeline.map((t, i) => (
-                      <li key={i} className="flex gap-4 items-start">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
-                            {i + 1}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm text-slate-500">
-                            {t.time ?? ''}
-                          </div>
-                          <div className="mt-1 font-semibold text-slate-800">
-                            {t.title}
-                          </div>
-                          {t.detail && (
-                            <div className="mt-1 text-sm text-slate-700">
-                              {t.detail}
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
+            {/* (TIMELINE REMOVED AS REQUESTED) */}
 
             {/* extended */}
             {report.weather && (
@@ -611,12 +599,13 @@ export default function ReportDetailPage({
               )}
             </div>
 
-            {/* --- Flight route / crash site map (client-only) --- */}
-            {/* Render only if we have either a crash site (hasGeo) or a path with >= 1 coords */}
+            <ReportTOC rootId="report-content" />
+
+            {/* --- Crash site map --- */}
             {(hasGeo || path.length > 0) && (
               <div className="rounded-md border border-slate-100 bg-white p-4">
                 <h4 className="text-sm font-semibold text-slate-800">
-                  Flight route
+                  Crash site
                 </h4>
                 <div className="mt-3 h-64">
                   {/* FlightMap will safely render only in the browser and will handle invalid coords */}
@@ -632,24 +621,9 @@ export default function ReportDetailPage({
               </div>
             )}
 
-            <ReportTOC rootId="report-content" />
-            <div className="rounded-md border border-slate-100 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Timeline</h4>
-              <div className="mt-3">
-                <Timeline items={report.timeline ?? []} compact />
-              </div>
-            </div>
+            {/* (TIMELINE REMOVED FROM SIDEBAR AS REQUESTED) */}
 
-            <div className="rounded-md border border-slate-100 bg-white p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Related</h4>
-              <div className="mt-3">
-                <RelatedReports
-                  operator={report.operator}
-                  tags={report.tags}
-                  currentId={report.id}
-                />
-              </div>
-            </div>
+            {/* (RELATED SECTION REMOVED AS REQUESTED) */}
           </aside>
         </div>
 

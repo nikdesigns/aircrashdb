@@ -49,7 +49,8 @@ export default function ReportTOC({
   return (
     <nav
       aria-label="Table of contents"
-      className="rounded border p-3 bg-slate-50 sticky top-24"
+      className="rounded border p-3 bg-slate-50"
+      // className="rounded border p-3 bg-slate-50 sticky top-24"
     >
       <div className="text-xs text-slate-500 mb-2">On this page</div>
       <ul className="space-y-1">
